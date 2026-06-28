@@ -19,7 +19,16 @@ set -euo pipefail
 HIKE_DIR="${HIKE_DIR:-$HOME/.hike}"
 PIDFILE="$HIKE_DIR/even-terminal.pid"
 LOGFILE="$HIKE_DIR/even-terminal.log"
+TEELOG="$HIKE_DIR/even-terminal-tee.log"
 TOKENFILE="$HIKE_DIR/token"
+
+# even-terminal ALWAYS tees its console to a log file and never cleans it up;
+# the default is `./even-terminal-<timestamp>.log`, dropped in the CURRENT dir on
+# every start (cli.js resolves the default relative to cwd, with no way to turn it
+# off). Run from inside a project — which `! hike-on` does — and it litters that
+# repo with an ever-growing pile of logs. Pin it to one fixed file inside HIKE_DIR
+# so it stays put; its content duplicates LOGFILE (we already capture stdout), so
+# it's just there to keep even-terminal from writing wherever we happen to be.
 
 # NOTE: do NOT pass `-d <dir>`. It sets even-terminal's PROJECT_DIR, and the
 # session-listing route scopes to it (routes/core.js: req.query.cwd ||
@@ -43,7 +52,8 @@ if [[ ! -f "$TOKENFILE" ]]; then
 fi
 
 : > "$LOGFILE"
-BRIDGE_TOKEN="$(cat "$TOKENFILE")" nohup caffeinate -is even-terminal start --tailscale >> "$LOGFILE" 2>&1 &
+: > "$TEELOG"
+BRIDGE_TOKEN="$(cat "$TOKENFILE")" nohup caffeinate -is even-terminal start --tailscale --log-file "$TEELOG" >> "$LOGFILE" 2>&1 &
 echo $! > "$PIDFILE"
 
 sleep 3

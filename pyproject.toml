@@ -1,0 +1,24 @@
+[project]
+name = "hike-mode"
+version = "0.1.0"
+description = "Supervise Claude Code sessions from Even Realities G2 glasses"
+readme = "README.md"
+license = { text = "MIT" }
+# str | None unions and PEP 585 generics in the scripts need 3.10+.
+requires-python = ">=3.10"
+# The tools themselves are standard-library only — no runtime dependencies.
+dependencies = []
+
+# The scripts are run by path (and have hyphens in their names), so there is no
+# importable package to build/install — uv should treat this as a workspace for
+# running the tests, not something to package.
+[tool.uv]
+package = false
+
+# Test-only dependency. `uv run pytest` installs it into the project venv on first
+# run; the shipped tools never import it.
+[dependency-groups]
+dev = ["pytest>=8"]
+
+[tool.pytest.ini_options]
+testpaths = ["even-terminal"]

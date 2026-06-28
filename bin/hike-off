@@ -5,17 +5,24 @@ set -uo pipefail
 
 PIDFILE="${HIKE_DIR:-$HOME/.hike}/even-terminal.pid"
 
+# The live node server's command line is `node <prefix>/bin/even-terminal start`
+# — the npm symlink path, NOT the resolved package file. (It can also appear as
+# `.../even-terminal/bin/cli.js` if launched via the resolved path.) Match either
+# form; both exclude the `caffeinate -is even-terminal start` parent, whose argv
+# contains neither substring, so this only targets the server itself.
+SERVER_PATTERN="bin/even-terminal|even-terminal/bin/cli"
+
 if [[ -f "$PIDFILE" ]] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
     kill "$(cat "$PIDFILE")" 2>/dev/null
 fi
 # caffeinate's child (the node server) does not die with it — kill precisely.
-pkill -f "even-terminal/bin/cli" 2>/dev/null
+pkill -f "$SERVER_PATTERN" 2>/dev/null
 rm -f "$PIDFILE"
 
 sleep 1
-if pgrep -f "even-terminal/bin/cli" >/dev/null; then
+if pgrep -f "$SERVER_PATTERN" >/dev/null; then
     echo "WARNING: even-terminal still running:"
-    pgrep -fl "even-terminal/bin/cli"
+    pgrep -fl "$SERVER_PATTERN"
     exit 1
 fi
 echo "hike mode OFF — server stopped, Mac may sleep"

@@ -131,12 +131,13 @@ while it's running; safety rests on the bearer token plus a trusted network.
 
 ## Tests
 
-The Python tools are standard-library only; the load-bearing logic is split from
-process/filesystem I/O and unit-tested:
+The Python tools are standard-library only — they import nothing outside the
+stdlib at runtime, so they run under bare `python3`. The *tests* use `pytest`,
+which `uv` installs into an isolated project venv on first run (declared as a
+dev-only dependency in `pyproject.toml`; the shipped tools never import it):
 
 ```bash
-cd even-terminal
-python3 -m pytest          # or: uv run pytest
+uv run pytest          # from the repo root — installs pytest the first time
 ```
 
 ## Caveats
