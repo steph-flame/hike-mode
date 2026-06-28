@@ -1,0 +1,65 @@
+#!/bin/bash
+# hike-on — start even-terminal under caffeinate so Claude sessions on this
+# Mac become supervisable from the Even G2 glasses. Run from anywhere,
+# including inside a Claude session via `! hike-on`.
+#
+# - Token is generated once and persisted (~/.hike/token) so the Even app
+#   pairing survives restarts. Never hand-set a weak token.
+# - caffeinate -is holds idle/system sleep for exactly as long as the
+#   server runs.
+# - Security posture (2026-06-23): the HTTP API ALWAYS binds 0.0.0.0
+#   (index.js: app.listen(PORT, "0.0.0.0")). `--tailscale` does NOT restrict
+#   the bind — it only makes the startup banner/QR advertise this Mac's
+#   Tailscale IPv4 (startup/common.js getTailscaleIp), so the phone pairs over
+#   the tailnet address instead of the LAN one. The port is still reachable on
+#   every interface; safety relies on the bearer token + a trusted network.
+#   Keep --tailscale (right QR for the phone) and run hike-off when you're back.
+set -euo pipefail
+
+HIKE_DIR="${HIKE_DIR:-$HOME/.hike}"
+PIDFILE="$HIKE_DIR/even-terminal.pid"
+LOGFILE="$HIKE_DIR/even-terminal.log"
+TOKENFILE="$HIKE_DIR/token"
+
+# NOTE: do NOT pass `-d <dir>`. It sets even-terminal's PROJECT_DIR, and the
+# session-listing route scopes to it (routes/core.js: req.query.cwd ||
+# PROJECT_DIR -> listSessions({dir})), so the glasses menu would show ONLY
+# sessions whose bucket is that dir and hide every other workspace. Resumes are
+# already cwd-independent (the session.js bucket-matcher patch resolves a
+# session's cwd from its own transcript bucket), so the pin buys nothing and
+# costs the full session list. Leave the project dir unset -> broad listing.
+
+mkdir -p "$HIKE_DIR"
+chmod 700 "$HIKE_DIR"
+
+if [[ -f "$PIDFILE" ]] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
+    echo "hike mode already ON (pid $(cat "$PIDFILE"))"
+    exit 0
+fi
+
+if [[ ! -f "$TOKENFILE" ]]; then
+    openssl rand -hex 16 > "$TOKENFILE"
+    chmod 600 "$TOKENFILE"
+fi
+
+: > "$LOGFILE"
+BRIDGE_TOKEN="$(cat "$TOKENFILE")" nohup caffeinate -is even-terminal start --tailscale >> "$LOGFILE" 2>&1 &
+echo $! > "$PIDFILE"
+
+sleep 3
+if ! kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
+    echo "FAILED to start — log tail:"
+    tail -5 "$LOGFILE"
+    rm -f "$PIDFILE"
+    exit 1
+fi
+
+echo "hike mode ON (pid $(cat "$PIDFILE")) — Mac will not sleep until hike-off"
+echo
+# even-terminal prints the pairing QR + connect URL to stdout at startup, but
+# nohup sent it to the log. Replay it so you can scan it with the Even app.
+# Plain cat renders the unicode-block QR scannably (do NOT pipe through cat -v
+# or sed — that mangles the blocks). Stop before the first runtime [server]/[
+# log line so only the banner + QR + URL show.
+sed '/^\[/q' "$LOGFILE"
+echo "full token: $HIKE_DIR/token · log: $LOGFILE"

@@ -1,0 +1,3 @@
+# Match the line length the scripts were written at (some embedded JS anchors in
+# even-terminal-patch.py legitimately run long and are noqa'd for E501).
+line-length = 100

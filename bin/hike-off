@@ -1,0 +1,21 @@
+#!/bin/bash
+# hike-off — stop even-terminal and release the caffeinate sleep hold.
+# Counterpart of hike-on; run it when you're back (`! hike-off` works too).
+set -uo pipefail
+
+PIDFILE="${HIKE_DIR:-$HOME/.hike}/even-terminal.pid"
+
+if [[ -f "$PIDFILE" ]] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
+    kill "$(cat "$PIDFILE")" 2>/dev/null
+fi
+# caffeinate's child (the node server) does not die with it — kill precisely.
+pkill -f "even-terminal/bin/cli" 2>/dev/null
+rm -f "$PIDFILE"
+
+sleep 1
+if pgrep -f "even-terminal/bin/cli" >/dev/null; then
+    echo "WARNING: even-terminal still running:"
+    pgrep -fl "even-terminal/bin/cli"
+    exit 1
+fi
+echo "hike mode OFF — server stopped, Mac may sleep"
