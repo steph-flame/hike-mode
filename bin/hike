@@ -1,0 +1,101 @@
+#!/bin/bash
+# hike — umbrella command for hike-mode. One entry on your PATH; everything else
+# is a subcommand. Run from anywhere (`! hike on` works inside a Claude session).
+#
+#   hike on  [--no-free] [--keep NAME]        start the bridge AND free your laptop
+#                                             sessions so the glasses can resume them
+#   hike off [--no-resume] [--all] [--no-open] stop the bridge AND reopen the sessions
+#                                             the glasses continued
+#   hike status                               is the bridge up? re-print the QR + URL
+#   hike free   [args...]                     free session locks only (see free-sessions.py)
+#   hike resume [args...]                     reopen freed sessions only (see resume-sessions.py)
+#
+# `on` frees and `off` resumes by default because that's the round trip a hike is;
+# --no-free / --no-resume opt out when you only want the bridge toggled.
+set -uo pipefail
+
+SELF="$(cd "$(dirname "$0")" && pwd)"
+HIKE_DIR="${HIKE_DIR:-$HOME/.hike}"
+FREED_STATE="$HIKE_DIR/freed-sessions.json"
+
+# Resolve a helper by name across the installed (libexec) and in-repo layouts, so
+# `hike` works both from a clone and after install.sh routes helpers to libexec.
+_helper() {
+    local name="$1" c
+    for c in "$SELF/../libexec/hike/$name" "$SELF/$name" "$SELF/../even-terminal/$name"; do
+        [[ -e "$c" ]] && { printf '%s\n' "$c"; return 0; }
+    done
+    echo "hike: cannot find helper '$name' (broken install?)" >&2
+    return 1
+}
+
+usage() {
+    # Print the header comment block (everything after the shebang up to the first
+    # non-comment line), with the leading "# " stripped — single source of truth.
+    awk 'NR==1 { next } /^#/ { sub(/^# ?/, ""); print; next } { exit }' "$0"
+}
+
+cmd="${1:-}"
+shift 2>/dev/null || true
+
+case "$cmd" in
+    on)
+        do_free=1
+        free_args=()
+        for a in "$@"; do
+            case "$a" in
+                --no-free) do_free=0 ;;
+                *) free_args+=("$a") ;;   # e.g. --keep NAME, forwarded to free-sessions.py
+            esac
+        done
+        hike_on="$(_helper hike-on)" || exit 1
+        # Start the bridge FIRST: if it fails (e.g. no Tailscale), we have not yet
+        # terminated any laptop session, so nothing is lost.
+        "$hike_on" || exit $?
+        if [[ "$do_free" == "1" ]]; then
+            free_py="$(_helper free-sessions.py)" || exit 1
+            echo
+            python3 "$free_py" --free ${free_args[@]+"${free_args[@]}"}
+        fi
+        ;;
+    off)
+        do_resume=1
+        resume_args=()
+        for a in "$@"; do
+            case "$a" in
+                --no-resume) do_resume=0 ;;
+                *) resume_args+=("$a") ;;  # e.g. --all, --no-open, forwarded to resume
+            esac
+        done
+        hike_off="$(_helper hike-off)" || exit 1
+        "$hike_off"; rc=$?
+        if [[ "$do_resume" == "1" ]]; then
+            if [[ -f "$FREED_STATE" ]]; then
+                resume_py="$(_helper resume-sessions.py)" || exit 1
+                echo
+                python3 "$resume_py" --launch ${resume_args[@]+"${resume_args[@]}"}
+            else
+                echo "(no freed sessions recorded — nothing to reopen)"
+            fi
+        fi
+        exit "$rc"
+        ;;
+    status)
+        exec "$(_helper hike-status)"
+        ;;
+    free)
+        exec python3 "$(_helper free-sessions.py)" "$@"
+        ;;
+    resume)
+        exec python3 "$(_helper resume-sessions.py)" "$@"
+        ;;
+    ""|-h|--help|help)
+        usage
+        ;;
+    *)
+        echo "hike: unknown subcommand '$cmd'" >&2
+        echo >&2
+        usage >&2
+        exit 1
+        ;;
+esac

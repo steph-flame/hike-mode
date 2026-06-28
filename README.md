@@ -8,17 +8,18 @@ moving while you're away from the keyboard (on a hike, on a walk, on the couch).
 It's a thin layer on top of [`even-terminal`](https://www.npmjs.com/package/@evenrealities/even-terminal)
 (Even Realities' terminal↔glasses bridge):
 
-- **`hike-on` / `hike-off` / `hike-status`** — one command to start/stop the
-  bridge under `caffeinate` (so your Mac won't sleep mid-session), with a
-  persisted pairing token and the pairing QR replayed to your terminal.
-  `hike-status` tells you whether it's up and re-replays the QR so you can
-  re-scan without restarting.
+- **`hike`** — one command for the whole round trip. `hike on` starts the bridge
+  under `caffeinate` (so your Mac won't sleep mid-session) **and** frees your
+  laptop sessions for the glasses; `hike off` stops the bridge **and** reopens the
+  ones you continued; `hike status` tells you whether it's up and re-replays the
+  pairing QR so you can re-scan without restarting.
 - **`even-terminal-patch.py`** — patches `even-terminal` so a *resumed* session
   inherits its real model, permission mode, and working directory, and runs with
   an effectively unbounded turn limit (the defaults silently downgrade you).
-- **`free-sessions.py` / `resume-sessions.py`** — the session-lock workaround:
-  release the laptop processes holding your sessions so the glasses can resume
-  them, then reopen them back home exactly where the glasses left off.
+- **`hike free` / `hike resume`** (the `free-sessions.py` / `resume-sessions.py`
+  tools) — the session-lock workaround `on`/`off` drive for you, also runnable on
+  their own: release the laptop processes holding your sessions so the glasses can
+  resume them, then reopen them back home exactly where the glasses left off.
 
 > **macOS only.** It leans on `caffeinate`, `tmux`, and (optionally) iTerm via
 > `osascript`. PRs to generalize are welcome.
@@ -43,9 +44,9 @@ These scripts make that round trip safe and one-paste.
 - [Claude Code](https://claude.com/claude-code)
 - [`even-terminal`](https://www.npmjs.com/package/@evenrealities/even-terminal):
   `npm i -g @evenrealities/even-terminal`
-- `tmux` (for `resume-sessions.py`): `brew install tmux`
+- `tmux` (for `hike resume`): `brew install tmux`
 - The Even Realities mobile app, paired with your G2 glasses
-- [Tailscale](https://tailscale.com/) — **required as shipped**: `hike-on`
+- [Tailscale](https://tailscale.com/) — **required as shipped**: `hike on`
   passes `--tailscale`, and even-terminal refuses to start without a resolvable
   Tailscale IPv4. The bridge binds to all interfaces, so this keeps the pairing
   QR pointed at your tailnet (see [Security](#security)). On a trusted LAN you
@@ -61,38 +62,39 @@ cd hike-mode
 ./install.sh
 ```
 
-`install.sh` copies `hike-on`/`hike-off` onto your `PATH` (default
-`~/.local/bin`, override with `BIN_DIR=...`) and applies the `even-terminal`
-patch. Re-run it after every `even-terminal` upgrade — an upgrade overwrites the
-package with a fresh, unpatched copy.
+`install.sh` puts the `hike` command on your `PATH` (default `~/.local/bin`,
+override with `BIN_DIR=...`), tucks its helpers into a sibling `libexec/`, and
+applies the `even-terminal` patch. Re-run it after every `even-terminal` upgrade
+— an upgrade overwrites the package with a fresh, unpatched copy.
 
 ## Usage
 
 ```bash
-hike-on        # start the bridge; scan the printed QR with the Even app
-hike-status    # is it up? re-print the QR + connect URL to re-scan
+hike on        # start the bridge AND free your sessions for the glasses; scan the QR
+hike status    # is it up? re-print the QR + connect URL to re-scan
 # ... go for your walk; supervise from the glasses ...
-hike-off       # stop the bridge, let the Mac sleep again
+hike off       # stop the bridge AND reopen the sessions you continued
 ```
 
-Before you leave, free any sessions you want to pick up on the glasses:
+`hike on` frees your laptop sessions (so the glasses can resume them) and `hike
+off` reopens the ones the glasses continued — that's the round trip a hike is.
+Skip either half with `hike on --no-free` / `hike off --no-resume`, and protect a
+session from being freed with `hike on --keep my-project`.
+
+You can also run the two halves on their own (both are safe dry-runs without their
+action flag):
 
 ```bash
-cd even-terminal
-python3 free-sessions.py                 # list locked sessions (safe; no changes)
-python3 free-sessions.py --free          # release them for the glasses
-python3 free-sessions.py --free --keep my-project   # protect one by name/id
+hike free                       # list locked sessions (safe; no changes)
+hike free --free                # release them for the glasses
+hike free --free --keep my-project   # protect one by name/id
+
+hike resume                     # list continued vs untouched (no changes)
+hike resume --launch            # reopen the ones the glasses continued
+hike resume --launch --all      # also reopen the untouched freed ones
 ```
 
-Back home, reopen what you continued on the glasses:
-
-```bash
-python3 resume-sessions.py               # list continued vs untouched (no changes)
-python3 resume-sessions.py --launch      # reopen the ones the glasses continued
-python3 resume-sessions.py --launch --all  # also reopen the untouched freed ones
-```
-
-`resume-sessions.py` puts each session back where it makes sense: if it was freed
+`hike resume` puts each session back where it makes sense: if it was freed
 from a **tmux pane** that's still alive, it resumes *in place* in that same pane;
 otherwise it gets its own tmux session and (on iTerm) an auto-opened window, so
 each lands in a separate, spread-able macOS window. `--no-open` skips the iTerm
@@ -122,42 +124,38 @@ re-patch) — the same way a firewall rule re-breaks after an upgrade.
 ## Security
 
 `even-terminal`'s HTTP API binds `0.0.0.0` (all interfaces) — `--tailscale`
-(which `hike-on` passes) only changes which address the pairing QR advertises, it
+(which `hike on` passes) only changes which address the pairing QR advertises, it
 does **not** restrict the bind. So the bridge is reachable on every interface
 while it's running; safety rests on the bearer token plus a trusted network.
-**Run it over Tailscale**, and run `hike-off` when you're done.
+**Run it over Tailscale**, and run `hike off` when you're done.
 
 ## Configuration
 
 | Env var | Default | What |
 |---------|---------|------|
 | `HIKE_DIR` | `~/.hike` | where the token, logs, and free/resume handoff live |
-| `BIN_DIR` | `~/.local/bin` | where `install.sh` puts the `hike-*` commands |
+| `BIN_DIR` | `~/.local/bin` | where `install.sh` puts the `hike` command |
 | `HIKE_TAILSCALE` | `1` | set to `0` to drop `--tailscale` (trusted-LAN use) |
 | `EVEN_MODEL` / `EVEN_PERMISSION_MODE` / `EVEN_MAX_TURNS` | — | force these for the bridge |
 
 ## Tests
 
-The Python tools are standard-library only — they import nothing outside the
-stdlib at runtime, so they run under bare `python3`. The *tests* use `pytest`,
-which `uv` installs into an isolated project venv on first run (declared as a
-dev-only dependency in `pyproject.toml`; the shipped tools never import it):
+`make check` is the one gate — ruff, the Python tests, `shellcheck`, and the shell
+tests. [CI](.github/workflows/ci.yml) runs this exact target on every push, so
+local and CI never drift.
 
 ```bash
-uv run pytest          # from the repo root — installs pytest the first time
+brew install bats-core shellcheck    # one-time: the shell tooling
+make check                           # ruff + pytest + shellcheck + bats
 ```
 
-The shell scripts (`hike-on`/`hike-off`/`hike-status`) are covered separately by
-[bats](https://github.com/bats-core/bats-core) — including a regression test for
-the `hike-off` kill pattern — and linted with `shellcheck`:
+- The Python tools are standard-library only (they run under bare `python3`); the
+  *tests* use `pytest`, which `uv` installs into an isolated venv on first run —
+  declared dev-only in `pyproject.toml`, never imported by the shipped tools.
+- The shell helpers are covered by [bats](https://github.com/bats-core/bats-core),
+  including a regression test for the `hike off` kill pattern.
 
-```bash
-brew install bats-core shellcheck
-shellcheck bin/hike-* install.sh
-bats test/hike.bats
-```
-
-[CI](.github/workflows/ci.yml) runs all of the above on every push.
+Run a single layer with `make test` (Python), `make bats`, or `make shellcheck`.
 
 ## Caveats
 

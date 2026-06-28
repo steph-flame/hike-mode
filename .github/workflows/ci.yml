@@ -21,17 +21,9 @@ jobs:
         with:
           node-version: 20
 
-      - name: Lint Python
-        run: uvx ruff check .
-
-      - name: Python tests
-        run: uv run pytest -q
-
       - name: Install shell tooling
         run: brew install bats-core shellcheck
 
-      - name: Shellcheck
-        run: shellcheck bin/hike-on bin/hike-off bin/hike-status install.sh
-
-      - name: Shell tests
-        run: bats test/hike.bats
+      # Single gate — identical to `make check` locally, so CI and dev never drift.
+      - name: make check
+        run: make check

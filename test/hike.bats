@@ -73,6 +73,40 @@ start_fake_server() {
     [[ "$output" == *"server IS running"* ]]
 }
 
+# --- the hike umbrella dispatcher ----------------------------------------------
+
+@test "hike status dispatches to the status helper (OFF when nothing runs)" {
+    run "$REPO/bin/hike" status
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"hike mode OFF"* ]]
+}
+
+@test "hike with no subcommand prints usage" {
+    run "$REPO/bin/hike"
+    [[ "$output" == *"umbrella command"* ]]
+    [[ "$output" == *"hike on"* ]]
+}
+
+@test "hike with an unknown subcommand errors and shows usage" {
+    run "$REPO/bin/hike" bogus
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"unknown subcommand"* ]]
+}
+
+@test "hike off stops the bridge and notes nothing to reopen (no freed state)" {
+    run "$REPO/bin/hike" off
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"hike mode OFF"* ]]
+    [[ "$output" == *"nothing to reopen"* ]]
+}
+
+@test "hike off --no-resume skips the reopen step" {
+    run "$REPO/bin/hike" off --no-resume
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"hike mode OFF"* ]]
+    [[ "$output" != *"reopen"* ]]
+}
+
 # --- the pattern itself: it must catch the server but never caffeinate ----------
 
 @test "SERVER_PATTERN matches both server argv forms but not the caffeinate parent" {
