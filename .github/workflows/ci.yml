@@ -1,0 +1,37 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    # macOS is the only supported platform, and the shell scripts depend on BSD
+    # pkill/pgrep + bash 3.2 semantics — running them on Linux would give false
+    # confidence (the bug this suite guards against was BSD-pkill-specific).
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Ensure node is available (the patch's JS-reader tests need it)
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Lint Python
+        run: uvx ruff check .
+
+      - name: Python tests
+        run: uv run pytest -q
+
+      - name: Install shell tooling
+        run: brew install bats-core shellcheck
+
+      - name: Shellcheck
+        run: shellcheck bin/hike-on bin/hike-off bin/hike-status install.sh
+
+      - name: Shell tests
+        run: bats test/hike.bats

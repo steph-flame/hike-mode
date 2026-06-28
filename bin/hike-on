@@ -51,9 +51,20 @@ if [[ ! -f "$TOKENFILE" ]]; then
     chmod 600 "$TOKENFILE"
 fi
 
+# --tailscale makes the pairing QR advertise this Mac's tailnet IP — the safe
+# default (see Security in the README). It is effectively required as shipped:
+# even-terminal REFUSES to start with --tailscale if it can't resolve a Tailscale
+# IPv4. Set HIKE_TAILSCALE=0 to drop the flag for a trusted LAN where tailscale
+# isn't running (the QR then advertises the LAN IP). Built as an array so the
+# flag is cleanly present or absent; the `${arr[@]+...}` guard keeps an empty
+# array from tripping `set -u` on macOS's bash 3.2.
+ts_args=()
+[[ "${HIKE_TAILSCALE:-1}" != "0" ]] && ts_args+=(--tailscale)
+
 : > "$LOGFILE"
 : > "$TEELOG"
-BRIDGE_TOKEN="$(cat "$TOKENFILE")" nohup caffeinate -is even-terminal start --tailscale --log-file "$TEELOG" >> "$LOGFILE" 2>&1 &
+BRIDGE_TOKEN="$(cat "$TOKENFILE")" nohup caffeinate -is even-terminal start \
+    ${ts_args[@]+"${ts_args[@]}"} --log-file "$TEELOG" >> "$LOGFILE" 2>&1 &
 echo $! > "$PIDFILE"
 
 sleep 3

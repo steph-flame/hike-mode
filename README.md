@@ -8,9 +8,11 @@ moving while you're away from the keyboard (on a hike, on a walk, on the couch).
 It's a thin layer on top of [`even-terminal`](https://www.npmjs.com/package/@evenrealities/even-terminal)
 (Even Realities' terminal↔glasses bridge):
 
-- **`hike-on` / `hike-off`** — one command to start/stop the bridge under
-  `caffeinate` (so your Mac won't sleep mid-session), with a persisted pairing
-  token and the pairing QR replayed to your terminal.
+- **`hike-on` / `hike-off` / `hike-status`** — one command to start/stop the
+  bridge under `caffeinate` (so your Mac won't sleep mid-session), with a
+  persisted pairing token and the pairing QR replayed to your terminal.
+  `hike-status` tells you whether it's up and re-replays the QR so you can
+  re-scan without restarting.
 - **`even-terminal-patch.py`** — patches `even-terminal` so a *resumed* session
   inherits its real model, permission mode, and working directory, and runs with
   an effectively unbounded turn limit (the defaults silently downgrade you).
@@ -43,8 +45,11 @@ These scripts make that round trip safe and one-paste.
   `npm i -g @evenrealities/even-terminal`
 - `tmux` (for `resume-sessions.py`): `brew install tmux`
 - The Even Realities mobile app, paired with your G2 glasses
-- Recommended: [Tailscale](https://tailscale.com/) — the bridge binds to all
-  interfaces, so only expose it over a trusted network (see [Security](#security))
+- [Tailscale](https://tailscale.com/) — **required as shipped**: `hike-on`
+  passes `--tailscale`, and even-terminal refuses to start without a resolvable
+  Tailscale IPv4. The bridge binds to all interfaces, so this keeps the pairing
+  QR pointed at your tailnet (see [Security](#security)). On a trusted LAN you
+  can drop it with `HIKE_TAILSCALE=0` instead
 - Optional: iTerm2 (for auto-opening a window per resumed session)
 - `python3` (the scripts are standard-library only — no venv needed)
 
@@ -65,6 +70,7 @@ package with a fresh, unpatched copy.
 
 ```bash
 hike-on        # start the bridge; scan the printed QR with the Even app
+hike-status    # is it up? re-print the QR + connect URL to re-scan
 # ... go for your walk; supervise from the glasses ...
 hike-off       # stop the bridge, let the Mac sleep again
 ```
@@ -126,7 +132,8 @@ while it's running; safety rests on the bearer token plus a trusted network.
 | Env var | Default | What |
 |---------|---------|------|
 | `HIKE_DIR` | `~/.hike` | where the token, logs, and free/resume handoff live |
-| `BIN_DIR` | `~/.local/bin` | where `install.sh` puts `hike-on`/`hike-off` |
+| `BIN_DIR` | `~/.local/bin` | where `install.sh` puts the `hike-*` commands |
+| `HIKE_TAILSCALE` | `1` | set to `0` to drop `--tailscale` (trusted-LAN use) |
 | `EVEN_MODEL` / `EVEN_PERMISSION_MODE` / `EVEN_MAX_TURNS` | — | force these for the bridge |
 
 ## Tests
@@ -139,6 +146,18 @@ dev-only dependency in `pyproject.toml`; the shipped tools never import it):
 ```bash
 uv run pytest          # from the repo root — installs pytest the first time
 ```
+
+The shell scripts (`hike-on`/`hike-off`/`hike-status`) are covered separately by
+[bats](https://github.com/bats-core/bats-core) — including a regression test for
+the `hike-off` kill pattern — and linted with `shellcheck`:
+
+```bash
+brew install bats-core shellcheck
+shellcheck bin/hike-* install.sh
+bats test/hike.bats
+```
+
+[CI](.github/workflows/ci.yml) runs all of the above on every push.
 
 ## Caveats
 

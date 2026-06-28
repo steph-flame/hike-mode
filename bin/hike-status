@@ -1,0 +1,46 @@
+#!/bin/bash
+# hike-status — is the bridge up? Re-replays the pairing QR + connect URL so you
+# can re-scan with the Even app without an hike-off/hike-on restart. Run from
+# anywhere (`! hike-status` works too).
+#
+# Exit status: 0 when the bridge is tracked-and-running, 1 otherwise (stopped, or
+# the warning case where a server is alive but not tracked by our pidfile) — so
+# it's usable in a script (`hike-status && ...`).
+set -uo pipefail
+
+HIKE_DIR="${HIKE_DIR:-$HOME/.hike}"
+PIDFILE="$HIKE_DIR/even-terminal.pid"
+LOGFILE="$HIKE_DIR/even-terminal.log"
+
+# Must match hike-off's pattern: the live server's argv is
+# `node <prefix>/bin/even-terminal start` (npm symlink) or, if launched by the
+# resolved path, `.../even-terminal/bin/cli.js`. Neither substring appears in the
+# `caffeinate -is even-terminal start` parent, so this targets the server alone.
+SERVER_PATTERN="bin/even-terminal|even-terminal/bin/cli"
+
+if [[ -f "$PIDFILE" ]] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
+    echo "hike mode ON (pid $(cat "$PIDFILE"))"
+    if [[ -f "$LOGFILE" ]]; then
+        echo
+        # The startup banner sits at the top of LOGFILE (hike-on truncates it at
+        # start and never again), so this replays the QR + connect URL. Stop before
+        # the first runtime [server]/[ log line; plain suppression keeps the
+        # unicode-block QR scannable.
+        sed '/^\[/q' "$LOGFILE"
+    fi
+    echo "Reachable on 0.0.0.0 while ON — keep it on a trusted network; run hike-off when done."
+    exit 0
+fi
+
+# Pidfile says we're off — but is a server alive anyway (e.g. an older start, or a
+# pidfile that was removed out from under a live process)? Surface it rather than
+# claim OFF while the bridge is still exposed.
+if pgrep -f "$SERVER_PATTERN" >/dev/null; then
+    echo "hike mode OFF per pidfile, but an even-terminal server IS running:"
+    pgrep -fl "$SERVER_PATTERN"
+    echo "Run hike-off to stop it (and free the 0.0.0.0 bind)."
+    exit 1
+fi
+
+echo "hike mode OFF"
+exit 1

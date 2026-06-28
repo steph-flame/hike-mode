@@ -18,7 +18,7 @@ command -v even-terminal >/dev/null 2>&1 || {
 command -v tmux >/dev/null 2>&1 || echo "warning: 'tmux' not found (needed by resume-sessions.py)."
 
 mkdir -p "$BIN_DIR"
-for script in hike-on hike-off; do
+for script in hike-on hike-off hike-status; do
     install -m 0755 "$REPO/bin/$script" "$BIN_DIR/$script"
     echo "installed $BIN_DIR/$script"
 done
