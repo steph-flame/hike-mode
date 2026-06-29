@@ -89,14 +89,37 @@ def parse_state(text: str) -> FreedState:
     return FreedState(freed_at=freed_at, sessions=sessions)
 
 
+# Delivered as the first turn when a session is reopened on the laptop, so Claude
+# knows the glasses drove it during the hike and should drop any HUD/terse mode.
+# `claude --resume <id> "<note>"` sends it as the opening message while staying
+# interactive. Override with HIKE_RESUME_NOTE; set it empty to resume with no note.
+DEFAULT_RESUME_NOTE = (
+    "[hike-mode] Back at the laptop now - the glasses had this session during the "
+    "hike. Resume normal full-width replies and drop any HUD/terse rendering."
+)
+
+
+def resume_note() -> str:
+    """The first-turn note for a laptop resume - env-overridable, possibly empty."""
+    return os.environ.get("HIKE_RESUME_NOTE", DEFAULT_RESUME_NOTE).strip()
+
+
 def resume_shell_command(s: FreedSession) -> str:
     """The shell command that lands back in this session at its latest state.
 
     Both fields are shell-quoted because this string is typed verbatim into a pane's
     shell via `tmux send-keys` — an unquoted cwd with a space would `cd` to the wrong
     directory (or fail) instead of resuming where the glasses left off.
+
+    Unless HIKE_RESUME_NOTE is empty, a return note is appended as a positional prompt
+    (`claude --resume <id> "<note>"`), which the CLI delivers as the first turn while
+    keeping the session interactive — so Claude knows the hike is over.
     """
-    return f"cd {shlex.quote(s.cwd)} && claude --resume {shlex.quote(s.session_id)}"
+    cmd = f"cd {shlex.quote(s.cwd)} && claude --resume {shlex.quote(s.session_id)}"
+    note = resume_note()
+    if note:
+        cmd += f" {shlex.quote(note)}"
+    return cmd
 
 
 def classify(

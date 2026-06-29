@@ -37,6 +37,14 @@ for tool in free-sessions.py resume-sessions.py; do
 done
 echo "installed helpers to $LIBEXEC"
 
+# The HUD rendering profile goes into the user skills dir, where even-terminal's
+# settingSources:["user","project"] picks it up — so a glasses session can be told
+# "use the hud-profile skill" and render for the heads-up display.
+SKILLS_DIR="$HOME/.claude/skills/hud-profile"
+mkdir -p "$SKILLS_DIR"
+install -m 0644 "$REPO/skills/hud-profile/SKILL.md" "$SKILLS_DIR/SKILL.md"
+echo "installed hud-profile skill to $SKILLS_DIR"
+
 case ":$PATH:" in
     *":$BIN_DIR:"*) ;;
     *) echo "note: $BIN_DIR is not on your PATH — add it to your shell rc." ;;

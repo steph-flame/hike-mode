@@ -31,6 +31,17 @@ sys.modules[_spec.name] = rs
 _spec.loader.exec_module(rs)
 
 
+@pytest.fixture(autouse=True)
+def _no_return_note(monkeypatch):
+    """Neutralize the laptop-return note by default.
+
+    Most tests assert the tmux/pane plumbing, not the note, so they expect the bare
+    `cd … && claude --resume …` form. The note-specific tests set HIKE_RESUME_NOTE
+    explicitly to override this.
+    """
+    monkeypatch.setenv("HIKE_RESUME_NOTE", "")
+
+
 def _state(freed_at: float, sessions: list[dict]) -> rs.FreedState:
     return rs.parse_state(json.dumps({"freed_at": freed_at, "sessions": sessions}))
 
@@ -116,6 +127,30 @@ def test_resume_shell_command_quotes_a_cwd_with_a_space() -> None:
     # quoted or the resume `cd`s into the wrong directory.
     s = rs.FreedSession("sess-a", "/work/my proj", None)
     assert rs.resume_shell_command(s) == "cd '/work/my proj' && claude --resume sess-a"
+
+
+def test_resume_shell_command_appends_the_return_note(monkeypatch) -> None:
+    # The note rides in as a positional prompt (shell-quoted), so claude delivers it
+    # as the first turn of the resumed session.
+    monkeypatch.setenv("HIKE_RESUME_NOTE", "back home")
+    s = rs.FreedSession("sess-a", "/work/a", "proj-a")
+    assert rs.resume_shell_command(s) == "cd /work/a && claude --resume sess-a 'back home'"
+
+
+def test_resume_shell_command_default_note_rides_along(monkeypatch) -> None:
+    # With no override, the shipped default note is appended (a real first-turn prompt).
+    monkeypatch.delenv("HIKE_RESUME_NOTE", raising=False)
+    s = rs.FreedSession("sess-a", "/work/a", "proj-a")
+    cmd = rs.resume_shell_command(s)
+    assert cmd.startswith("cd /work/a && claude --resume sess-a ")
+    assert "hike-mode" in cmd
+
+
+def test_resume_shell_command_empty_note_sends_no_prompt(monkeypatch) -> None:
+    # HIKE_RESUME_NOTE="" (or whitespace) opts out: a bare resume, no positional prompt.
+    monkeypatch.setenv("HIKE_RESUME_NOTE", "   ")
+    s = rs.FreedSession("sess-a", "/work/a", "proj-a")
+    assert rs.resume_shell_command(s) == "cd /work/a && claude --resume sess-a"
 
 
 def test_sanitize_session_name_keeps_safe_chars_and_collapses_the_rest() -> None:

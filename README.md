@@ -136,6 +136,7 @@ while it's running; safety rests on the bearer token plus a trusted network.
 | `HIKE_DIR` | `~/.hike` | where the token, logs, and free/resume handoff live |
 | `BIN_DIR` | `~/.local/bin` | where `install.sh` puts the `hike` command |
 | `HIKE_TAILSCALE` | `1` | set to `0` to drop `--tailscale` (trusted-LAN use) |
+| `HIKE_RESUME_NOTE` | (a "back at the laptop" note) | first-turn message `hike off` sends when reopening a session; set empty to send none |
 | `EVEN_MODEL` / `EVEN_PERMISSION_MODE` / `EVEN_MAX_TURNS` | — | force these for the bridge |
 
 ## Tests
@@ -167,10 +168,23 @@ Run a single layer with `make test` (Python), `make bats`, or `make shellcheck`.
   terminal tab can't be targeted programmatically, so those reopen as fresh
   windows.
 
+## Glasses-aware rendering
+
+`install.sh` also installs a **`hud-profile` skill** (into `~/.claude/skills`) that
+tells Claude to render for the heads-up display — verdict-first, ~one screen,
+tap-sized questions, no wide tables (adapted from [memo-flow's `pager`
+skill](https://github.com/GuillermoMurillo/memo-flow)). even-terminal's
+`settingSources` already loads user skills, so a glasses session can be told *"use
+the hud-profile skill"* and switch into HUD mode. On the way back, `hike off`
+appends a one-line note to the resumed session (`HIKE_RESUME_NOTE`) so Claude knows
+the hike is over and drops HUD mode. Run `/hud-profile` on the laptop to preview the
+style.
+
 ## Roadmap
 
-- Skills that make Claude render more glasses-friendly on the HUD (terse,
-  verdict-first, tap-sized questions).
+- Auto-inject *"use the hud-profile skill"* as the first glasses turn (the patch
+  side), so HUD mode engages without being asked — the `hud-profile` skill that it
+  triggers already ships.
 - Generalize beyond macOS / iTerm.
 
 ## License
