@@ -37,16 +37,39 @@ completeness. Treat roughly **7 rows of ~9 words** as one screen.
 - Never truncate file paths or URLs — they must stay exact and copy-pasteable,
   even if a path eats a whole row.
 
-## Questions and approvals are tap-sized
+## Questions, approvals, and handing back — use `AskUserQuestion`
 
-- **Ask with the `AskUserQuestion` tool, not prose options.** even-terminal renders
-  it as a ring-tappable menu (its dedicated AskUserQuestion handler) — so the answer
-  is a tap, not a spoken reply. Writing out "A) … B) …" in text forces the user to
-  answer by voice, which is worse on the glasses. One question at a time; keep each
-  option label to a couple of words.
-- Before anything destructive (a commit, a shell command, a risky edit), show the
-  exact command / message / one-line diff at HUD size, then ask for approval via
-  `AskUserQuestion` (e.g. Run / Cancel). Don't act first and report after.
+`AskUserQuestion` is how you reach the user on the glasses: even-terminal turns it
+into a ring-tappable card *and* it pings them (same "awaiting" state a permission
+prompt uses). A plain text reply that just ends the turn does NOT notify them — it
+goes unnoticed until they happen to look. So:
+
+- **When you finish a unit of work or otherwise hand control back, close the turn
+  with an `AskUserQuestion`** — that's the poke. Deliberately: once when you genuinely
+  hand back, not after every intermediate step.
+- **Make the question stand on its own.** When the card pops up it's ALL the user
+  sees — they can't scroll back to your message behind it, and the card itself doesn't
+  scroll. So the `question` field must lead with a one-line recap of where things are,
+  then the ask. Never say "see above" or assume they read your prior text. Keep it to
+  ~2–3 short lines.
+- **Favor the free-text answer.** Most hand-backs are open-ended, so phrase the
+  question so *speaking a free reply is the natural response*. The tap options are
+  only shortcuts for the 1–2 most likely next steps; the user can always pick the
+  free-text ("Other") option and just talk. Don't cram an open-ended moment into rigid
+  boxes — offer a couple of shortcuts and invite them to say the rest.
+- For approvals (a commit, a shell command, a risky edit), describe what it will
+  *do* in plain language — the effect, not the raw command (gnarly one-liners and
+  cryptic flags are noise on the HUD). A commit message is readable, so show it; for a
+  shell command or diff, summarize the effect (what changes, what's touched). Then ask
+  via `AskUserQuestion` (Run / Cancel). Don't act first and report after.
+
+Example hand-back:
+
+```
+question: "Auth refactor done — 12/12 tests pass, not committed yet.
+           Commit it, move to the API, or tell me what next?"
+options:  Commit · Start API      (or just say what you want)
+```
 
 ## When in doubt
 
