@@ -10,6 +10,9 @@ anchors, so the two things that can silently break are:
      the `[1m]`-suffix strip, the last-wins permission-mode round-trip, and the
      bucket-matching cwd capture (the cwd whose Claude project bucket holds this
      transcript, so `--resume` can find it — not the subdir the session wandered into).
+  3. The embedded `_ppHikeNote` JS that supplies the one-time "you're on a hike"
+     preamble — its shipped default, an EVEN_HIKE_NOTE override, and the empty-string
+     off-switch.
 
 (1) is exercised end-to-end through `main()` against a temp fixture (locate_session_js
 monkeypatched). (2) is exercised by running the *actual* injected JS under node against a
@@ -59,8 +62,9 @@ class Session {
     constructor(id) {
         this.sessionId = id;
     }
-    run() {
+    run(prompt) {
         const q = query({
+            prompt,
                 model: "claude-opus-4-6",
                 permissionMode: "acceptEdits",
                 maxTurns: 50,
@@ -106,6 +110,12 @@ def test_apply_rewrites_the_hardcoded_settings(monkeypatch, tmp_path: Path) -> N
     assert "maxTurns: 50," not in out
     # The meta is resolved once, just before the query call.
     assert "const _ppMeta = _ppSessionMeta(this.sessionId);" in out
+    # The first-turn hike preamble is wired in: the prompt is swapped for the greeted
+    # one, the greeting is gated on a per-session-id Set, and the bare `prompt,` is gone.
+    assert "prompt: _ppPrompt," in out
+    assert "\n            prompt,\n" not in out
+    assert "this._ppGreeted" in out
+    assert "_ppHikeNote()" in out
     # A timestamped backup of the original was written.
     assert list(tmp_path.glob("session.js.bak-*"))
 
@@ -373,3 +383,44 @@ def test_reader_ignores_an_empty_cwd(tmp_path: Path) -> None:
     # clobber a live lockedCwd through the `_ppMeta.cwd || this.lockedCwd` fallback.
     meta = _run_reader(tmp_path, [{"type": "user", "cwd": ""}], "sess-1")
     assert "cwd" not in meta
+
+
+# --------------------------------------------------------------------------------------
+# The first-turn hike preamble (_ppHikeNote), run under the real node runtime
+# --------------------------------------------------------------------------------------
+
+
+def _run_hike_note(tmp_path: Path, env_note: str | None) -> str:
+    """Run the injected `_ppHikeNote()` under node, optionally with EVEN_HIKE_NOTE set.
+
+    `env_note=None` leaves the var unset (the shipped default); any string (including "")
+    sets it, exercising the override / disable paths.
+    """
+    harness = tmp_path / "note.mjs"
+    harness.write_text(patch.IMPORT_REPLACEMENT + "\nprocess.stdout.write(_ppHikeNote());\n")
+    env = {k: v for k, v in os.environ.items() if k != "EVEN_HIKE_NOTE"}
+    if env_note is not None:
+        env["EVEN_HIKE_NOTE"] = env_note
+    result = subprocess.run(
+        ["node", str(harness)], capture_output=True, text=True, check=True, env=env
+    )
+    return result.stdout
+
+
+@_needs_node
+def test_hike_note_defaults_to_the_hud_preamble(tmp_path: Path) -> None:
+    note = _run_hike_note(tmp_path, None)
+    assert "hud-profile" in note
+    assert "hike-mode" in note
+
+
+@_needs_node
+def test_hike_note_honours_an_override(tmp_path: Path) -> None:
+    assert _run_hike_note(tmp_path, "custom preamble") == "custom preamble"
+
+
+@_needs_node
+def test_hike_note_empty_string_disables_greeting(tmp_path: Path) -> None:
+    # An empty EVEN_HIKE_NOTE is the documented off-switch: the injected code only
+    # prepends `if (_ppNote)`, so "" means no greeting at all.
+    assert _run_hike_note(tmp_path, "") == ""

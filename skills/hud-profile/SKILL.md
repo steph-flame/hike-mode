@@ -3,8 +3,9 @@ name: hud-profile
 description: >-
   Render replies for a low-resolution heads-up display (Even Realities G2 glasses).
   Use when supervising a session from the glasses / on a hike, or whenever told to
-  render for the HUD. hike-mode injects "use the hud-profile skill" as the first
-  glasses turn; you can also invoke it on the laptop to preview how output will look.
+  render for the HUD. hike-mode prepends a "you're on a hike — use the hud-profile
+  skill" preamble to the first turn of each resumed glasses session, so this engages
+  without being asked; you can also invoke it on the laptop to preview the output.
 ---
 
 # HUD profile — rendering for the glasses

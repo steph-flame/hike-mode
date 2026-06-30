@@ -174,17 +174,19 @@ Run a single layer with `make test` (Python), `make bats`, or `make shellcheck`.
 tells Claude to render for the heads-up display — verdict-first, ~one screen,
 tap-sized questions, no wide tables (adapted from [memo-flow's `pager`
 skill](https://github.com/GuillermoMurillo/memo-flow)). even-terminal's
-`settingSources` already loads user skills, so a glasses session can be told *"use
-the hud-profile skill"* and switch into HUD mode. On the way back, `hike off`
-appends a one-line note to the resumed session (`HIKE_RESUME_NOTE`) so Claude knows
-the hike is over and drops HUD mode. Run `/hud-profile` on the laptop to preview the
-style.
+`settingSources` already loads user skills, so HUD mode engages on its own: the
+even-terminal patch prepends a one-time *"you're on a hike — use the hud-profile
+skill"* preamble to the **first turn of each resumed glasses session**, so Claude
+switches into HUD rendering without being asked (override or disable it with
+`EVEN_HIKE_NOTE`; set it to `""` to turn the greeting off). On the way back, `hike
+off` appends a one-line note to the resumed session (`HIKE_RESUME_NOTE`) so Claude
+knows the hike is over and drops HUD mode. Run `/hud-profile` on the laptop to
+preview the style.
 
 ## Roadmap
 
-- Auto-inject *"use the hud-profile skill"* as the first glasses turn (the patch
-  side), so HUD mode engages without being asked — the `hud-profile` skill that it
-  triggers already ships.
+- Greet brand-new glasses sessions too (today only *resumed* sessions get the
+  preamble — a new session has no id on its first turn to gate the once-only greeting).
 - Generalize beyond macOS / iTerm.
 
 ## License

@@ -9,8 +9,15 @@ settings instead of even-terminal's hardcoded defaults:
                        whatever the app supplied, which --resume often couldn't locate)
   * maxTurns        -> effectively unbounded               (was: 50)
 
+It also injects a one-time "you're on a hike" preamble in front of the FIRST turn
+of each resumed session, so Claude switches into HUD rendering (the hud-profile
+skill) without being asked. even-terminal only runs while the hike bridge is up, so
+"bridge running" == "on a hike"; the preamble is prepended to the user's first
+message for a given session id and never repeated. Set EVEN_HIKE_NOTE="" to disable.
+
 For a NEW glasses session (no session to resume) the model is left unset so the
 Agent SDK applies its own default, and the permission mode falls back to "acceptEdits".
+A new session is not greeted (it has no session id yet on its first turn).
 
 Idempotent: re-run after every `even-terminal` upgrade (an upgrade overwrites
 the package with a fresh, unpatched session.js). Fails loud if even-terminal's
@@ -26,6 +33,7 @@ Runtime env overrides the patch adds (read by even-terminal, not by this script)
   EVEN_MODEL            force the model for ALL sessions (e.g. claude-opus-4-8)
   EVEN_PERMISSION_MODE  force the permission mode for ALL sessions
   EVEN_MAX_TURNS        force the per-prompt turn cap (default 100000)
+  EVEN_HIKE_NOTE        override the first-turn hike preamble; "" disables greeting
 """
 
 from __future__ import annotations
@@ -81,15 +89,38 @@ function _ppSessionMeta(sessionId) {
         }
     } catch {}
     return out;
+}
+// __EVEN_PATCH__ the one-time "you're on a hike" preamble prepended to the first turn
+// of each resumed session. EVEN_HIKE_NOTE overrides it; setting it to "" disables greeting.
+function _ppHikeNote() {
+    const env = process.env.EVEN_HIKE_NOTE;
+    if (env !== undefined) return env;
+    return "[hike-mode] You're being supervised from Even G2 glasses while away from the keyboard (a hike, a walk): replies render on a tiny heads-up display, are read aloud, and are answered by voice or a ring tap. Use the hud-profile skill for the rest of this glasses session \\u2014 verdict first, ~one screen, no wide tables, and keep questions tap-sized (recommendation first). This preamble was auto-injected by hike-mode; the human's actual message follows.";
 }"""
 
 # (anchor, replacement) pairs applied after the import block. Each anchor MUST
 # appear exactly once.
 EDITS = [
-    # Resolve the resumed session's settings once, just before the query call.
+    # Resolve the resumed session's settings once, just before the query call, and
+    # prepend the hike preamble to the first turn of each resumed session (tracked on
+    # the instance so it fires exactly once per session id per bridge run).
     (
         "        const q = query({",
-        "        const _ppMeta = _ppSessionMeta(this.sessionId); // __EVEN_PATCH__\n        const q = query({",
+        "        const _ppMeta = _ppSessionMeta(this.sessionId); // __EVEN_PATCH__\n"
+        "        let _ppPrompt = prompt; // __EVEN_PATCH__\n"
+        "        if (typeof prompt === \"string\" && this.sessionId) { // __EVEN_PATCH__\n"
+        "            this._ppGreeted = this._ppGreeted || new Set();\n"
+        "            if (!this._ppGreeted.has(this.sessionId)) {\n"
+        "                this._ppGreeted.add(this.sessionId);\n"
+        "                const _ppNote = _ppHikeNote();\n"
+        "                if (_ppNote) _ppPrompt = _ppNote + \"\\n\\n---\\n\\n\" + prompt;\n"
+        "            }\n"
+        "        }\n"
+        "        const q = query({",
+    ),
+    (
+        "            prompt,",
+        "            prompt: _ppPrompt, // __EVEN_PATCH__",
     ),
     (
         "                cwd: this.lockedCwd,",
